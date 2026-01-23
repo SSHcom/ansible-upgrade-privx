@@ -1,0 +1,20 @@
+# Ansible-lint configuration
+---
+# Skip specific rules that are acceptable for our use case
+skip_list:
+  - yaml[line-length]  # Allow long lines for complex Jinja2 expressions
+  - no-handler         # Tasks run conditionally based on upgrade results, not as handlers
+
+# Use default profile
+profile: basic
+
+# Exclude certain paths
+exclude_paths:
+  - .github/
+  - .git/
+
+# Enable offline mode (don't check for newer versions)
+offline: true
+
+# Set verbosity
+verbosity: 1

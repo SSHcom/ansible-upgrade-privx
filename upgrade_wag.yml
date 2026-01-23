@@ -1,0 +1,80 @@
+---
+# PrivX Web Access Gateway (WAG) Upgrade Playbook
+# This playbook handles the upgrade of PrivX Carrier and PrivX Web Proxy components
+# Carrier and Web Proxy work in pairs and must be upgraded in sequence:
+# 1. First Carrier node → First Web Proxy node → Second Carrier node → Second Web Proxy node, etc.
+
+# Stage 1: WAG version check
+- name: PrivX WAG upgrade - Version check
+  hosts:
+    - privxcarrier
+    - privxwebproxy
+  gather_facts: false
+  tags:
+    - wag_upgrade
+  tasks:
+    - name: WAG version check
+      ansible.builtin.include_tasks: tasks/upgrade_wag/wag_version_check.yml
+
+# Stage 2: WAG configuration file validation
+- name: PrivX WAG upgrade - Configuration file validation
+  hosts:
+    - privxcarrier
+    - privxwebproxy
+  gather_facts: false
+  tags:
+    - wag_upgrade
+  tasks:
+    - name: WAG configuration file validation
+      ansible.builtin.include_tasks: tasks/upgrade_wag/wag_config_validation.yml
+
+# Stage 3: WAG RPM availability validation
+- name: PrivX WAG upgrade - RPM availability validation
+  hosts:
+    - privxcarrier
+    - privxwebproxy
+  gather_facts: false
+  tags:
+    - wag_upgrade
+  tasks:
+    - name: WAG RPM availability validation
+      ansible.builtin.include_tasks: tasks/upgrade_wag/wag_rpm_validation.yml
+
+# Stage 4: Paired upgrade of Carrier and Web Proxy nodes
+- name: PrivX WAG upgrade - Paired upgrade process
+  hosts: localhost
+  gather_facts: false
+  tags:
+    - wag_upgrade
+  vars:
+    carrier_nodes: "{{ groups['privxcarrier'] | default([]) }}"
+    webproxy_nodes: "{{ groups['privxwebproxy'] | default([]) }}"
+    max_pairs: "{{ [carrier_nodes | length, webproxy_nodes | length] | max }}"
+  tasks:
+    - name: Validate WAG node pairing
+      ansible.builtin.assert:
+        that:
+          - carrier_nodes | length > 0
+          - webproxy_nodes | length > 0
+          - carrier_nodes | length == webproxy_nodes | length
+        fail_msg: |
+          WAG NODE PAIRING VALIDATION FAILED
+
+          PrivX Carrier and Web Proxy nodes must be configured in pairs.
+
+          Current configuration:
+            Carrier nodes: {{ carrier_nodes | length }}
+            Web Proxy nodes: {{ webproxy_nodes | length }}
+
+          Please ensure:
+            • Equal number of nodes in [privxcarrier] and [privxwebproxy] groups
+            • At least one pair of nodes is configured
+
+        success_msg: "WAG node pairing validated. Found {{ carrier_nodes | length }} pairs to upgrade."
+
+    - name: Upgrade WAG pairs sequentially
+      ansible.builtin.include_tasks: tasks/upgrade_wag/upgrade_wag_pair.yml
+      loop: "{{ range(0, max_pairs | int) | list }}"
+      loop_control:
+        loop_var: pair_index
+        label: "Pair {{ pair_index + 1 }}"

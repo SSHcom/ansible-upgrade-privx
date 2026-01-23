@@ -1,0 +1,26 @@
+---
+- name: Check currently installed PrivX version
+  ansible.builtin.package_facts:
+    manager: auto
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+
+- name: Extract current PrivX version
+  ansible.builtin.set_fact:
+    current_privx_version: "{{ ansible_facts.packages['PrivX'][0].version if 'PrivX' in ansible_facts.packages else 'not_installed' }}"
+
+- name: Display current and target versions
+  ansible.builtin.debug:
+    msg:
+      - "Current PrivX version: {{ current_privx_version }}"
+      - "Target PrivX version: {{ privx_target_version }}"
+
+- name: Display early exit message and fail playbook
+  ansible.builtin.fail:
+    msg:
+      - "✅ PrivX-{{ privx_target_version }} is already installed on all nodes"
+      - "No upgrade needed. Target version matches current version."
+      - "Playbook execution stopped to avoid unnecessary operations."
+  when:
+    - current_privx_version != 'not_installed'
+    - current_privx_version == (privx_target_version | string)

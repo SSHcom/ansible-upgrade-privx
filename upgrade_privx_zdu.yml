@@ -1,0 +1,62 @@
+---
+# PrivX Zero Downtime Upgrade (ZDU) Playbook
+# This playbook performs a zero-downtime upgrade using PrivX's built-in ZDU scripts
+
+# Stage 1: Backup validation (run once globally)
+- name: PrivX ZDU - Backup validation
+  hosts: privx_primary
+  gather_facts: false
+  vars:
+    privx_backup_confirmed: false
+  tasks:
+    - name: Backup validation (global gate)
+      ansible.builtin.include_tasks: tasks/upgrade_privx/backup_validation.yml
+
+# Stage 2: ZDU version compatibility check
+- name: PrivX ZDU - Version compatibility check
+  hosts:
+    - privx_primary
+    - privx_additional_nodes
+  gather_facts: false
+  tasks:
+    - name: ZDU version compatibility check
+      ansible.builtin.include_tasks: tasks/upgrade_privx/zdu_version_check.yml
+
+# Stage 3: RPM availability validation on all nodes
+- name: PrivX ZDU - RPM availability validation
+  hosts:
+    - privx_primary
+    - privx_additional_nodes
+  gather_facts: false
+  tasks:
+    - name: RPM availability validation
+      ansible.builtin.include_tasks: tasks/upgrade_privx/rpm_validation.yml
+
+# Stage 4: Execute first stage upgrade on all nodes
+- name: PrivX ZDU - First stage upgrade
+  hosts:
+    - privx_primary
+    - privx_additional_nodes
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Execute upgrade_first_stage.sh
+      ansible.builtin.include_tasks: tasks/upgrade_privx/zdu_first_stage.yml
+
+# Stage 5: Validate all nodes have target version
+- name: PrivX ZDU - Version validation after first stage
+  hosts:
+    - privx_primary
+    - privx_additional_nodes
+  gather_facts: false
+  tasks:
+    - name: Validate target version installed
+      ansible.builtin.include_tasks: tasks/upgrade_privx/zdu_version_validation.yml
+
+# Stage 6: Execute second stage upgrade on primary only
+- name: PrivX ZDU - Second stage upgrade
+  hosts: privx_primary
+  gather_facts: false
+  tasks:
+    - name: Execute upgrade_second_stage.sh on primary
+      ansible.builtin.include_tasks: tasks/upgrade_privx/zdu_second_stage.yml

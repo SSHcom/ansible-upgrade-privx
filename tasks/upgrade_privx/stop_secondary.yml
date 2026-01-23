@@ -1,0 +1,7 @@
+---
+- name: Stop PrivX service
+  ansible.builtin.systemd:
+    name: privx
+    state: stopped
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"

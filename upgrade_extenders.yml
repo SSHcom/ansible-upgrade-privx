@@ -1,0 +1,45 @@
+---
+# PrivX-Extender Upgrade Playbook
+# This playbook handles the upgrade of PrivX-Extender nodes
+# Extenders work in pairs for High Availability and must be upgraded one by one
+
+# Stage 1: Extender version check
+- name: PrivX-Extender upgrade - Version check
+  hosts: privxextender
+  gather_facts: false
+  tags:
+    - extender_upgrade
+  tasks:
+    - name: Extender version check
+      ansible.builtin.include_tasks: tasks/upgrade_extender/extender_version_check.yml
+
+# Stage 2: Extender configuration file validation
+- name: PrivX-Extender upgrade - Configuration file validation
+  hosts: privxextender
+  gather_facts: false
+  tags:
+    - extender_upgrade
+  tasks:
+    - name: Extender configuration file validation
+      ansible.builtin.include_tasks: tasks/upgrade_extender/extender_config_validation.yml
+
+# Stage 3: PrivX-Extender RPM validation (check on first extender)
+- name: PrivX-Extender upgrade - RPM availability validation
+  hosts: privxextender
+  gather_facts: false
+  tags:
+    - extender_upgrade
+  tasks:
+    - name: Extender RPM availability validation
+      ansible.builtin.include_tasks: tasks/upgrade_extender/extender_rpm_validation.yml
+
+# Stage 4: Upgrade PrivX-Extender nodes (one by one for HA)
+- name: PrivX-Extender upgrade - Upgrade extenders
+  hosts: privxextender
+  gather_facts: false
+  serial: 1
+  tags:
+    - extender_upgrade
+  tasks:
+    - name: Upgrade PrivX-Extender nodes
+      ansible.builtin.include_tasks: tasks/upgrade_extender/upgrade_extenders.yml

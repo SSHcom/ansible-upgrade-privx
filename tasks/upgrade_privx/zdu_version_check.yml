@@ -1,0 +1,176 @@
+---
+- name: Check currently installed PrivX version
+  ansible.builtin.package_facts:
+    manager: auto
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+
+- name: Extract current PrivX version
+  ansible.builtin.set_fact:
+    current_privx_version: "{{ ansible_facts.packages['PrivX'][0].version if 'PrivX' in ansible_facts.packages else 'not_installed' }}"
+
+- name: Parse target version components with error handling
+  block:
+    - name: Extract target version parts
+      ansible.builtin.set_fact:
+        target_version_parts: "{{ (privx_target_version | string).split('.') }}"
+        target_major: "{{ (privx_target_version | string).split('.')[0] | default('0') | regex_replace('[^0-9]', '') | int }}"
+        target_minor: "{{ (privx_target_version | string).split('.')[1] | default('0') | regex_replace('[^0-9]', '') | int }}"
+
+    - name: Validate target version format
+      ansible.builtin.assert:
+        that:
+          - target_version_parts | length == 2
+          - (target_version_parts[0] | regex_replace('[^0-9]', '') | length) > 0
+          - (target_version_parts[1] | regex_replace('[^0-9]', '') | length) > 0
+          - target_major > 0
+        fail_msg:
+          - "ZDU VERSION FORMAT ERROR - TARGET VERSION"
+          - ""
+          - "Invalid target version format: {{ privx_target_version }}"
+          - "Expected format: X.Y (exactly 2 parts, e.g., 42.0, 41.5)"
+          - "Received: {{ target_version_parts | join('.') }} ({{ target_version_parts | length }} parts)"
+          - ""
+          - "TROUBLESHOOTING:"
+          - "• Verify privx_target_version in inventory/hosts.ini"
+          - "• Use standard PrivX version format (major.minor)"
+          - "• ZDU requires X.Y format for compatibility checking"
+  rescue:
+    - name: Handle target version parsing failure
+      ansible.builtin.fail:
+        msg:
+          - "ZDU VERSION PARSING ERROR - TARGET VERSION"
+          - ""
+          - "Unable to parse target version: {{ privx_target_version }}"
+          - "Expected format: X.Y (e.g., 42.0, 41.5)"
+          - ""
+          - "TROUBLESHOOTING:"
+          - "• Check privx_target_version is correctly set in inventory"
+          - "• Ensure version contains only numbers and dots"
+          - "• Use standard PrivX version format"
+
+- name: Parse current version components with error handling
+  block:
+    - name: Extract current version parts (when installed)
+      ansible.builtin.set_fact:
+        current_major: "{{ current_privx_version.split('.')[0] | default('0') | regex_replace('[^0-9]', '') | int }}"
+        current_minor: "{{ current_privx_version.split('.')[1] | default('0') | regex_replace('[^0-9]', '') | int }}"
+      when: current_privx_version != 'not_installed'
+
+    - name: Validate current version format (when installed)
+      ansible.builtin.assert:
+        that:
+          - current_privx_version.split('.') | length >= 2
+          - (current_privx_version.split('.')[0] | regex_replace('[^0-9]', '') | length) > 0
+          - (current_privx_version.split('.')[1] | regex_replace('[^0-9]', '') | length) > 0
+          - current_major > 0
+        fail_msg:
+          - "ZDU VERSION FORMAT ERROR - CURRENT VERSION"
+          - ""
+          - "Invalid current PrivX version format: {{ current_privx_version }}"
+          - "Expected format: X.Y or X.Y.Z (e.g., 41.0, 41.1.5)"
+          - "Received: {{ current_privx_version.split('.') | join('.') }} ({{ current_privx_version.split('.') | length }} parts)"
+          - ""
+          - "TROUBLESHOOTING:"
+          - "• Check installed PrivX version: rpm -q PrivX --queryformat '%{VERSION}'"
+          - "• This may indicate an unexpected RPM version format"
+          - "• Contact support if version format is non-standard"
+      when: current_privx_version != 'not_installed'
+  rescue:
+    - name: Handle current version parsing failure
+      ansible.builtin.fail:
+        msg:
+          - "ZDU VERSION PARSING ERROR - CURRENT VERSION"
+          - ""
+          - "Unable to parse current PrivX version: {{ current_privx_version }}"
+          - "This may indicate an unexpected version format from the RPM package"
+          - ""
+          - "TROUBLESHOOTING:"
+          - "• Check installed version: rpm -q PrivX --queryformat '%{VERSION}'"
+          - "• Verify PrivX package is properly installed"
+          - "• Contact support if version format is non-standard"
+
+- name: Set default current version components for not_installed
+  ansible.builtin.set_fact:
+    current_major: 0
+    current_minor: 0
+  when: current_privx_version == 'not_installed'
+
+- name: Calculate version compatibility flags
+  ansible.builtin.set_fact:
+    is_major_version_upgrade: "{{ current_major == (target_major - 1) }}"
+    is_minor_version_upgrade: "{{ current_major == target_major and current_minor < target_minor }}"
+    version_gap: "{{ target_major - current_major }}"
+
+- name: Display current and target versions
+  ansible.builtin.debug:
+    msg:
+      - "==================================================================="
+      - "ZDU Version Compatibility Analysis"
+      - "==================================================================="
+      - "Current PrivX version: {{ current_privx_version }}"
+      - "Target PrivX version: {{ privx_target_version }}"
+      - "Parsed current: {{ current_major }}.{{ current_minor }}"
+      - "Parsed target: {{ target_major }}.{{ target_minor }}"
+      - "Version gap (major): {{ version_gap }}"
+      - ""
+      - "Compatibility flags:"
+      - "  • Major version upgrade: {{ is_major_version_upgrade }}"
+      - "  • Minor version upgrade: {{ is_minor_version_upgrade }}"
+      - "==================================================================="
+
+- name: Check if target version is already installed
+  ansible.builtin.fail:
+    msg:
+      - "✅ PrivX-{{ privx_target_version }} is already installed on {{ inventory_hostname }}"
+      - "No upgrade needed. Target version matches current version."
+      - "ZDU playbook execution stopped."
+  when:
+    - current_privx_version != 'not_installed'
+    - current_privx_version == (privx_target_version | string)
+
+- name: Validate ZDU upgrade path compatibility
+  ansible.builtin.assert:
+    that:
+      - current_privx_version != 'not_installed'
+      - current_major is defined and current_major > 0
+      - current_minor is defined
+      - target_major is defined and target_major > 0
+      - target_minor is defined
+      - version_gap <= 1
+      - is_major_version_upgrade or is_minor_version_upgrade
+    fail_msg: |
+      ZDU VERSION COMPATIBILITY CHECK FAILED
+
+      Zero Downtime Upgrade requires the current version to be at most one major version behind the target.
+
+      Current version: {{ current_privx_version }} (parsed as {{ current_major | default('unknown') }}.{{ current_minor | default('unknown') }})
+      Target version: {{ privx_target_version }} (parsed as {{ target_major | default('unknown') }}.{{ target_minor | default('unknown') }})
+      Version gap: {{ version_gap | default('unknown') }} major versions
+
+      COMPATIBILITY ANALYSIS:
+        • Major version upgrade ({{ current_major }} → {{ target_major }}): {{ is_major_version_upgrade }}
+        • Minor version upgrade ({{ current_major }}.{{ current_minor }} → {{ target_major }}.{{ target_minor }}): {{ is_minor_version_upgrade }}
+
+      VALID ZDU UPGRADE PATHS:
+        • From {{ target_major - 1 }}.x to {{ privx_target_version }} (major version upgrade)
+        • From {{ target_major }}.0 to {{ privx_target_version }} (minor version upgrade)
+
+      RECOMMENDED ACTIONS:
+      {% if version_gap > 1 %}
+      1. Use incremental upgrades: {{ current_privx_version }} → {{ target_major - 1 }}.x → {{ privx_target_version }}
+      2. Or use standard upgrade process: ansible-playbook -i inventory upgrade_privx.yml
+      {% else %}
+      1. Use standard upgrade process: ansible-playbook -i inventory upgrade_privx.yml
+      2. Verify version compatibility requirements
+      {% endif %}
+
+      TROUBLESHOOTING:
+        • Check versions: rpm -q PrivX --queryformat '%{VERSION}'
+        • Review PrivX ZDU documentation for supported upgrade paths
+        • Contact support for guidance on complex upgrade scenarios
+
+    success_msg: >-
+      ✅ ZDU version compatibility validated.
+      {{ current_privx_version }} → {{ privx_target_version }} is supported
+      ({{ 'major' if is_major_version_upgrade else 'minor' }} version upgrade).

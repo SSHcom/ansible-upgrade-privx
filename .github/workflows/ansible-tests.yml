@@ -1,0 +1,81 @@
+name: Ansible PrivX Upgrade Tests
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: |
+          pip install ansible ansible-lint yamllint
+      - name: Run linting tests
+        run: |
+          ansible-lint
+          yamllint .
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install Ansible
+        run: |
+          pip install ansible
+      - name: Validate playbooks
+        run: |
+          ansible-playbook -i inventory --syntax-check *.yml
+          ansible-inventory -i inventory/hosts.ini --list
+
+  inventory-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Ansible
+        run: pip install ansible
+      - name: Validate inventory structure
+        run: |
+          ansible-inventory -i inventory/hosts.ini --graph
+          ansible-inventory -i inventory/hosts.ini --list > /dev/null
+          echo "✅ Inventory structure validated"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history for better secret detection
+      
+      - name: Install GitLeaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz | tar xz
+          sudo mv gitleaks /usr/local/bin/
+      
+      - name: Run GitLeaks Secret Scan
+        run: |
+          gitleaks detect --config .gitleaks.toml --verbose --no-color --exit-code 0
+        continue-on-error: true
+      
+      - name: Run Semgrep Security Scan
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+        continue-on-error: true
+      
+      - name: Check for hardcoded IPs and credentials
+        run: |
+          echo "Checking for hardcoded sensitive data..."
+          # Check for IP addresses (excluding examples)
+          grep -r --include="*.yml" --include="*.yaml" -E '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' . | grep -v example || true
+          # Check for potential passwords
+          grep -r --include="*.yml" --include="*.yaml" -i "password.*=" . | grep -v example || true

@@ -1,0 +1,40 @@
+---
+- name: Check PrivX version after first stage upgrade
+  ansible.builtin.package_facts:
+    manager: auto
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+
+- name: Extract current PrivX version
+  ansible.builtin.set_fact:
+    current_privx_version: "{{ ansible_facts.packages['PrivX'][0].version if 'PrivX' in ansible_facts.packages else 'not_installed' }}"
+
+- name: Display version validation results
+  ansible.builtin.debug:
+    msg:
+      - "Node: {{ inventory_hostname }}"
+      - "Current version: {{ current_privx_version }}"
+      - "Expected version: {{ privx_target_version }}"
+
+- name: Validate target version is installed
+  ansible.builtin.assert:
+    that:
+      - current_privx_version != 'not_installed'
+      - current_privx_version == (privx_target_version | string)
+    fail_msg: |
+      ZDU FIRST STAGE VALIDATION FAILED
+
+      Node {{ inventory_hostname }} does not have the target version installed after first stage.
+
+      Current version: {{ current_privx_version }}
+      Expected version: {{ privx_target_version }}
+
+      The ZDU first stage upgrade may have failed. Please check:
+        • PrivX logs on {{ inventory_hostname }}
+        • Network connectivity during upgrade
+        • Repository availability
+        • System resources (disk space, memory)
+
+      ZDU second stage will not proceed until all nodes have the target version.
+
+    success_msg: "✅ {{ inventory_hostname }} successfully upgraded to {{ privx_target_version }}"

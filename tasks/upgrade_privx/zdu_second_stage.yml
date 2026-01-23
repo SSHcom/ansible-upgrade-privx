@@ -1,0 +1,40 @@
+---
+- name: Execute PrivX ZDU second stage upgrade on primary
+  ansible.builtin.shell: |
+    /opt/privx/scripts/upgrade_second_stage.sh
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: zdu_second_stage_result
+  failed_when: zdu_second_stage_result.rc != 0
+  changed_when: zdu_second_stage_result.rc == 0
+
+- name: Display second stage upgrade output
+  ansible.builtin.debug:
+    var: zdu_second_stage_result.stdout_lines
+    verbosity: 0
+
+- name: Display second stage upgrade summary
+  ansible.builtin.debug:
+    msg:
+      - ""
+      - "==================================================================="
+      - "✅ ZDU Second Stage Completed: {{ inventory_hostname }}"
+      - "==================================================================="
+      - ""
+      - "{% if zdu_second_stage_result.stderr %}⚠️  Errors detected - see stderr output above{% endif %}"
+
+- name: Verify PrivX services are running
+  ansible.builtin.systemd:
+    name: privx
+    state: started
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: privx_service_status
+
+- name: Log ZDU completion
+  ansible.builtin.debug:
+    msg:
+      - "🎉 PrivX Zero Downtime Upgrade completed successfully!"
+      - "All nodes upgraded to version {{ privx_target_version }}"
+      - "PrivX services are running on primary node"
+      - "ZDU process completed without service interruption"

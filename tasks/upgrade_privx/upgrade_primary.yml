@@ -1,0 +1,16 @@
+---
+- name: Upgrade PrivX on primary
+  ansible.builtin.package:
+    name: "PrivX-{{ privx_target_version }}"
+    state: present
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+
+- name: Notify user for validation
+  ansible.builtin.debug:
+    msg: |
+      Primary PrivX node upgraded to {{ privx_target_version }}.
+      Perform validation, then run:
+        touch {{ privx_validation_file }}
+      After validation, re-run playbook with:
+        --tags secondary_upgrade

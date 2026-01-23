@@ -1,0 +1,73 @@
+---
+# Stage 1: Backup validation (run once globally)
+- name: PrivX upgrade - Backup validation
+  hosts: privx_primary
+  gather_facts: false
+  tags:
+    - primary_upgrade
+  vars:
+    privx_backup_confirmed: false
+  tasks:
+    - name: Backup validation (global gate)
+      ansible.builtin.include_tasks: tasks/upgrade_privx/backup_validation.yml
+
+# Stage 2: Version check for primary upgrade
+- name: PrivX upgrade - Version check (Primary)
+  hosts: privx_primary
+  gather_facts: false
+  tags:
+    - primary_upgrade
+  tasks:
+    - name: Version check
+      ansible.builtin.include_tasks: tasks/upgrade_privx/version_check.yml
+
+# Stage 3: RPM availability validation (check on primary node)
+- name: PrivX upgrade - RPM availability validation
+  hosts:
+    - privx_primary
+  gather_facts: false
+  tags:
+    - primary_upgrade
+  tasks:
+    - name: RPM availability validation
+      ansible.builtin.include_tasks: tasks/upgrade_privx/rpm_validation.yml
+
+# Stage 4: Stop PrivX on all secondary nodes
+- name: PrivX upgrade - Stop secondary nodes
+  hosts: privx_additional_nodes
+  gather_facts: false
+  tags:
+    - primary_upgrade
+  tasks:
+    - name: Stop PrivX on secondary nodes
+      ansible.builtin.include_tasks: tasks/upgrade_privx/stop_secondary.yml
+
+# Stage 5: Upgrade primary node
+- name: PrivX upgrade - Upgrade primary
+  hosts: privx_primary
+  gather_facts: false
+  tags:
+    - primary_upgrade
+  tasks:
+    - name: Upgrade primary PrivX node
+      ansible.builtin.include_tasks: tasks/upgrade_privx/upgrade_primary.yml
+
+# Stage 6: Version check for secondary upgrade
+- name: PrivX upgrade - Version check (Secondary)
+  hosts: privx_additional_nodes
+  gather_facts: false
+  tags:
+    - secondary_upgrade
+  tasks:
+    - name: Version check
+      ansible.builtin.include_tasks: tasks/upgrade_privx/version_check.yml
+
+# Stage 7: Upgrade secondary nodes (after manual validation)
+- name: PrivX upgrade - Upgrade secondary nodes
+  hosts: privx_additional_nodes
+  gather_facts: false
+  tags:
+    - secondary_upgrade
+  tasks:
+    - name: Upgrade secondary PrivX nodes
+      ansible.builtin.include_tasks: tasks/upgrade_privx/upgrade_secondary.yml

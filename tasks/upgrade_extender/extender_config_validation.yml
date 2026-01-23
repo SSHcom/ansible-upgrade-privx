@@ -1,0 +1,90 @@
+---
+- name: Check if extender configuration file exists
+  ansible.builtin.stat:
+    path: "configuration_files/{{ inventory_hostname }}-extender-config.toml"
+  register: extender_config_file
+  delegate_to: localhost
+  run_once: false
+
+- name: Validate extender configuration file availability
+  ansible.builtin.assert:
+    that:
+      - extender_config_file.stat.exists
+    fail_msg: |
+      EXTENDER CONFIGURATION FILE MISSING
+
+      Required configuration file not found: configuration_files/{{ inventory_hostname }}-extender-config.toml
+
+      MANUAL STEPS REQUIRED:
+
+      1. After PrivX core upgrade completion, log into PrivX UI
+      2. Download Extender configurations via the PrivX GUI at Administration→Deployment→Deploy PrivX VPC/VPN Extenders
+      3. Download the new version extender configuration file for {{ inventory_hostname }}
+      4. Make any necessary configuration changes manually
+      5. Save the file as: configuration_files/{{ inventory_hostname }}-extender-config.toml
+
+      Naming convention: <ansible_inventory_node>-extender-config.toml
+
+      Example for this node:
+        configuration_files/{{ inventory_hostname }}-extender-config.toml
+
+      Once the configuration file is in place, re-run the extender upgrade:
+        ansible-playbook -i inventory upgrade_extenders.yml
+
+    success_msg: "Configuration file found for {{ inventory_hostname }}. Proceeding with extender upgrade."
+
+- name: Read extender configuration file content
+  ansible.builtin.slurp:
+    path: "configuration_files/{{ inventory_hostname }}-extender-config.toml"
+  register: extender_config_content
+  delegate_to: localhost
+  run_once: false
+  when: privx_target_version is version('42.0', '>=', strict=True)
+
+- name: Decode extender configuration content
+  ansible.builtin.set_fact:
+    extender_config_text: "{{ extender_config_content.content | b64decode }}"
+  when: privx_target_version is version('42.0', '>=', strict=True)
+
+- name: Check if extender configuration is V2 format
+  ansible.builtin.set_fact:
+    is_v2_config: >-
+      {{ 'extender_mode = "normal"' in extender_config_text or
+         'extender_mode = "forward"' in extender_config_text or
+         'extender_mode = "passive"' in extender_config_text }}
+  when: privx_target_version is version('42.0', '>=', strict=True)
+
+- name: Display extender configuration version
+  ansible.builtin.debug:
+    msg:
+      - "==================================================================="
+      - "Extender Configuration Version Detection"
+      - "==================================================================="
+      - "Node: {{ inventory_hostname }}"
+      - "Configuration file: configuration_files/{{ inventory_hostname }}-extender-config.toml"
+      - "Detected format: {{ 'V2 (extender_mode = normal/forward/passive)' if is_v2_config | bool else 'V1 (extender_mode = \"\")' }}"
+      - "Target PrivX version: {{ privx_target_version }}"
+      - ""
+      - "{% if is_v2_config | bool %}✅ Using V2 configuration with new operating modes{% else %}✅ Using V1 configuration (fully supported){% endif %}"
+      - ""
+      - "Note: Both V1 and V2 configurations are supported in PrivX 42.0+"
+      - "V2 provides additional operating modes: normal, forward, passive"
+      - "==================================================================="
+  when: privx_target_version is version('42.0', '>=', strict=True)
+
+- name: Pause to allow configuration version review
+  ansible.builtin.pause:
+    seconds: 15
+    prompt: |
+
+      ⏸️  Pausing for 15 seconds to allow configuration review.
+
+      If you need to change the configuration version:
+        1. Press Ctrl+C to cancel
+        2. Download the desired configuration (V1 or V2) from PrivX UI
+        3. Replace the file: configuration_files/{{ inventory_hostname }}-extender-config.toml
+        4. Re-run the playbook
+
+      Otherwise, the upgrade will continue automatically...
+  delegate_to: localhost
+  when: privx_target_version is version('42.0', '>=', strict=True)

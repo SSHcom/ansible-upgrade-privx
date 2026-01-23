@@ -1,0 +1,31 @@
+---
+- name: Set current pair nodes
+  ansible.builtin.set_fact:
+    current_carrier: "{{ carrier_nodes[pair_index] if pair_index < (carrier_nodes | length) else '' }}"
+    current_webproxy: "{{ webproxy_nodes[pair_index] if pair_index < (webproxy_nodes | length) else '' }}"
+
+- name: Display current pair information
+  ansible.builtin.debug:
+    msg:
+      - "=== Upgrading WAG Pair {{ pair_index + 1 }} ==="
+      - "Carrier node: {{ current_carrier }}"
+      - "Web Proxy node: {{ current_webproxy }}"
+      - ""
+
+- name: Upgrade PrivX-Carrier node
+  ansible.builtin.include_tasks: tasks/upgrade_wag/upgrade_carrier.yml
+  when: current_carrier != ''
+  vars:
+    target_host: "{{ current_carrier }}"
+
+- name: Upgrade PrivX-WebProxy node
+  ansible.builtin.include_tasks: tasks/upgrade_wag/upgrade_webproxy.yml
+  when: current_webproxy != ''
+  vars:
+    target_host: "{{ current_webproxy }}"
+
+- name: Wait between WAG pairs
+  ansible.builtin.pause:
+    seconds: "{{ wag_pair_stabilization_wait | default(30) }}"
+    prompt: "Waiting {{ wag_pair_stabilization_wait | default(30) }} seconds for WAG pair {{ pair_index + 1 }} to stabilize"
+  when: pair_index < (max_pairs | int - 1)

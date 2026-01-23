@@ -1,0 +1,19 @@
+---
+- name: Verify backups are confirmed before upgrade
+  ansible.builtin.assert:
+    that:
+      - privx_backup_confirmed | bool
+    fail_msg: |
+      BACKUP CONFIRMATION REQUIRED
+
+      The following backups MUST be completed before upgrading PrivX:
+
+        • PrivX Database Backup
+        • PrivX Server Configuration Backup
+
+      After completing backups, re-run the playbook with:
+
+          -e privx_backup_confirmed=true
+
+    success_msg: "Backup confirmation verified. Proceeding with PrivX upgrade."
+  run_once: true

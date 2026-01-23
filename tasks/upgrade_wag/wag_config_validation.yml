@@ -1,0 +1,72 @@
+---
+- name: Check if carrier configuration file exists
+  ansible.builtin.stat:
+    path: "configuration_files/{{ inventory_hostname }}-carrier-config.toml"
+  register: carrier_config_file
+  delegate_to: localhost
+  run_once: false
+  when: "'privxcarrier' in group_names"
+
+- name: Check if webproxy configuration file exists
+  ansible.builtin.stat:
+    path: "configuration_files/{{ inventory_hostname }}-web-proxy-config.toml"
+  register: webproxy_config_file
+  delegate_to: localhost
+  run_once: false
+  when: "'privxwebproxy' in group_names"
+
+- name: Validate carrier configuration file availability
+  ansible.builtin.assert:
+    that:
+      - carrier_config_file.stat.exists
+    fail_msg: |
+      CARRIER CONFIGURATION FILE MISSING
+
+      Required configuration file not found: configuration_files/{{ inventory_hostname }}-carrier-config.toml
+
+      MANUAL STEPS REQUIRED:
+
+      1. After PrivX core upgrade completion, log into PrivX UI
+      2. To Download Carrier/Web-Proxy Configurations in the PrivX GUI navigate to Administration→Deployment→Deploy PrivX web-access gateways
+      3. Download the new version carrier configuration file for {{ inventory_hostname }}
+      4. Make any necessary configuration changes manually
+      5. Save the file as: configuration_files/{{ inventory_hostname }}-carrier-config.toml
+
+      Naming convention: <ansible_inventory_node>-carrier-config.toml
+
+      Example for this node:
+        configuration_files/{{ inventory_hostname }}-carrier-config.toml
+
+      Once the configuration file is in place, re-run the WAG upgrade:
+        ansible-playbook -i inventory upgrade_wag.yml
+
+    success_msg: "Carrier configuration file found for {{ inventory_hostname }}."
+  when: "'privxcarrier' in group_names"
+
+- name: Validate webproxy configuration file availability
+  ansible.builtin.assert:
+    that:
+      - webproxy_config_file.stat.exists
+    fail_msg: |
+      WEBPROXY CONFIGURATION FILE MISSING
+
+      Required configuration file not found: configuration_files/{{ inventory_hostname }}-web-proxy-config.toml
+
+      MANUAL STEPS REQUIRED:
+
+      1. After PrivX core upgrade completion, log into PrivX UI
+      2. To Download Carrier/Web-Proxy Configurations in the PrivX GUI navigate to Administration→Deployment→Deploy PrivX web-access gateways
+      3. Download the new version webproxy configuration file for {{ inventory_hostname }}
+      4. Make any necessary configuration changes manually
+      5. Save the file as: configuration_files/{{ inventory_hostname }}-web-proxy-config.toml
+
+      Naming convention: <ansible_inventory_node>-web-proxy-config.toml
+
+      Example for this node:
+        configuration_files/{{ inventory_hostname }}-web-proxy-config.toml
+
+      Once the configuration file is in place, re-run the WAG upgrade:
+        ansible-playbook -i inventory upgrade_wag.yml
+
+    success_msg: "WebProxy configuration file found for {{ inventory_hostname }}."
+  when: "'privxwebproxy' in group_names"

@@ -1,0 +1,37 @@
+---
+- name: Execute PrivX ZDU first stage upgrade
+  ansible.builtin.shell: |
+    set -o pipefail
+    echo "y" | /opt/privx/scripts/upgrade_first_stage.sh PrivX-{{ privx_target_version }}
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: zdu_first_stage_result
+  failed_when: zdu_first_stage_result.rc != 0
+  changed_when: zdu_first_stage_result.rc == 0
+
+- name: Display first stage upgrade output
+  ansible.builtin.debug:
+    var: zdu_first_stage_result.stdout_lines
+    verbosity: 0
+
+- name: Display first stage upgrade summary
+  ansible.builtin.debug:
+    msg:
+      - ""
+      - "==================================================================="
+      - "✅ ZDU First Stage Completed: {{ inventory_hostname }}"
+      - "==================================================================="
+      - ""
+      - "{% if zdu_first_stage_result.stderr %}⚠️  Errors detected - see stderr output above{% endif %}"
+
+- name: Wait for system stabilization after first stage
+  ansible.builtin.pause:
+    seconds: "{{ zdu_stabilization_wait | default(30) }}"
+    prompt: "Waiting {{ zdu_stabilization_wait | default(30) }} seconds for system stabilization after first stage upgrade on {{ inventory_hostname }}"
+  delegate_to: localhost
+
+- name: Log first stage completion
+  ansible.builtin.debug:
+    msg: "✅ ZDU first stage upgrade completed successfully on {{ inventory_hostname }}"

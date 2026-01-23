@@ -1,0 +1,107 @@
+---
+- name: Check if version-specific backup already exists
+  ansible.builtin.stat:
+    path: "/opt/privx/etc/carrier-config.toml.backup-pre-upgrade-{{ privx_target_version }}"
+  register: carrier_backup_exists
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  delegate_to: "{{ target_host }}"
+
+- name: Backup existing carrier configuration file
+  ansible.builtin.copy:
+    src: /opt/privx/etc/carrier-config.toml
+    dest: "/opt/privx/etc/carrier-config.toml.backup-pre-upgrade-{{ privx_target_version }}"
+    remote_src: true
+    backup: false
+    mode: '0644'
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: carrier_config_backup_result
+  ignore_errors: true
+  when: not carrier_backup_exists.stat.exists
+  delegate_to: "{{ target_host }}"
+
+- name: Display configuration backup status
+  ansible.builtin.debug:
+    msg: >-
+      Carrier backup status: {{
+        'Success - New backup created' if (carrier_config_backup_result.changed | default(false))
+        else ('Skipped - Backup already exists for version ' + (privx_target_version | string)
+        if carrier_backup_exists.stat.exists else 'Failed (original file may not exist)')
+      }}
+
+- name: Upgrade PrivX-Carrier
+  ansible.builtin.package:
+    name: "PrivX-Carrier-{{ privx_target_version }}"
+    state: present
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: carrier_upgrade_result
+  delegate_to: "{{ target_host }}"
+
+- name: Copy new carrier configuration file to server
+  ansible.builtin.copy:
+    src: "configuration_files/{{ target_host }}-carrier-config.toml"
+    dest: /opt/privx/etc/carrier-config.toml
+    owner: root
+    group: root
+    mode: '0644'
+    backup: false
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: carrier_config_deploy_result
+  when: carrier_upgrade_result.changed
+  delegate_to: "{{ target_host }}"
+
+- name: Run carrier postinstall script
+  ansible.builtin.command:
+    cmd: /opt/privx/scripts/carrier-postinstall.sh
+  timeout: 120
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: carrier_postinstall_result
+  when: carrier_upgrade_result.changed
+  delegate_to: "{{ target_host }}"
+  failed_when: false
+  changed_when: carrier_postinstall_result.rc == 0
+
+- name: Handle carrier postinstall timeout or failure
+  ansible.builtin.fail:
+    msg:
+      - "⚠️  CARRIER POSTINSTALL SCRIPT FAILED OR TIMED OUT"
+      - ""
+      - "Host: {{ target_host }}"
+      - "Script: /opt/privx/scripts/carrier-postinstall.sh"
+      - "Return Code: {{ carrier_postinstall_result.rc | default('N/A') }}"
+      - "Timeout: 120 seconds (2 minutes)"
+      - ""
+      - "--- SCRIPT OUTPUT ---"
+      - "{{ carrier_postinstall_result.stdout | default('No stdout output') }}"
+      - ""
+      - "--- SCRIPT ERRORS ---"
+      - "{{ carrier_postinstall_result.stderr | default('No stderr output') }}"
+      - ""
+      - "⚠️  MANUAL INTERVENTION REQUIRED"
+      - ""
+      - "Please troubleshoot the issue manually:"
+      - "  1. SSH to {{ target_host }}"
+      - "  2. Check carrier logs: journalctl -u privx-carrier -n 100"
+      - "  3. Verify configuration: cat /opt/privx/etc/carrier-config.toml"
+      - "  4. Try running postinstall manually: /opt/privx/scripts/carrier-postinstall.sh"
+      - "  5. Check system resources: df -h && free -h"
+      - ""
+      - "Playbook execution stopped. Fix the issue before continuing."
+  when:
+    - carrier_upgrade_result.changed
+    - carrier_postinstall_result.rc is defined
+    - carrier_postinstall_result.rc != 0
+
+- name: Display carrier upgrade results
+  ansible.builtin.debug:
+    msg:
+      - "PrivX-Carrier upgrade completed on {{ target_host }}."
+      - ""
+      - "RPM Status: {{ 'Updated' if carrier_upgrade_result.changed else 'Already up-to-date' }}"
+      - "Configuration Backup: {{ 'New backup created' if (carrier_config_backup_result.changed | default(false)) else ('Already backed up for v' + (privx_target_version | string) if carrier_backup_exists.stat.exists else 'Skipped (original not found)') }}"
+      - "Configuration Deploy: {{ 'Success' if (carrier_config_deploy_result.changed | default(false)) else ('Skipped - No upgrade performed' if not carrier_upgrade_result.changed else 'No changes needed') }}"
+      - "Postinstall Status: {{ 'Completed successfully' if (carrier_postinstall_result.rc | default(-1)) == 0 else ('Skipped - No upgrade performed' if not carrier_upgrade_result.changed else 'Failed with return code ' + (carrier_postinstall_result.rc | default(-1) | string)) }}"

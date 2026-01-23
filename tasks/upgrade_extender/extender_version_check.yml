@@ -1,0 +1,26 @@
+---
+- name: Check currently installed PrivX-Extender version
+  ansible.builtin.package_facts:
+    manager: auto
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+
+- name: Extract current PrivX-Extender version
+  ansible.builtin.set_fact:
+    current_extender_version: "{{ ansible_facts.packages['PrivX-Extender'][0].version if 'PrivX-Extender' in ansible_facts.packages else 'not_installed' }}"
+
+- name: Display current and target versions
+  ansible.builtin.debug:
+    msg:
+      - "Current PrivX-Extender version: {{ current_extender_version }}"
+      - "Target PrivX version: {{ privx_target_version }}"
+
+- name: Display early exit message and fail playbook
+  ansible.builtin.fail:
+    msg:
+      - "✅ PrivX-Extender-{{ privx_target_version }} is already installed on {{ inventory_hostname }}"
+      - "No upgrade needed. Target version matches current version."
+      - "Playbook execution stopped to avoid unnecessary operations."
+  when:
+    - current_extender_version != 'not_installed'
+    - current_extender_version == (privx_target_version | string)

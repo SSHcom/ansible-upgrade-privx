@@ -1,0 +1,31 @@
+---
+- name: Check if PrivX-Extender RPM is available
+  ansible.builtin.dnf:
+    list: "PrivX-Extender-{{ privx_target_version }}"
+  register: privx_extender_rpm_check
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  run_once: true
+  delegate_to: "{{ groups['privxextender'][0] }}"
+
+- name: Verify PrivX-Extender RPM availability
+  ansible.builtin.assert:
+    that:
+      - privx_extender_rpm_check.results | length > 0
+      - privx_extender_rpm_check.results[0].name == "PrivX-Extender"
+    fail_msg: |
+      PRIVX-EXTENDER RPM AVAILABILITY CHECK FAILED
+
+      PrivX-Extender-{{ privx_target_version }} RPM is NOT available in the configured repositories.
+
+      Please ensure:
+        • PrivX-Extender-{{ privx_target_version }} package exists in repositories
+        • Repository configuration is correct on extender nodes
+        • Network connectivity to repositories is working
+
+      Available PrivX-Extender versions can be checked with:
+        yum list available | grep -i privx-extender
+
+    success_msg: "PrivX-Extender-{{ privx_target_version }} RPM is available. Proceeding with extender upgrades."
+  run_once: true
+  delegate_to: "{{ groups['privxextender'][0] }}"

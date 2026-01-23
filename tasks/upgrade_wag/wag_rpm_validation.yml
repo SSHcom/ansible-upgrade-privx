@@ -1,0 +1,58 @@
+---
+- name: Check if PrivX-Carrier RPM is available
+  ansible.builtin.dnf:
+    list: "PrivX-Carrier-{{ privx_target_version }}"
+  register: privx_carrier_rpm_check
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  when: "'privxcarrier' in group_names"
+
+- name: Check if PrivX-WebProxy RPM is available
+  ansible.builtin.dnf:
+    list: "PrivX-Web-Proxy-{{ privx_target_version }}"
+  register: privx_webproxy_rpm_check
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  when: "'privxwebproxy' in group_names"
+
+- name: Verify PrivX-Carrier RPM availability
+  ansible.builtin.assert:
+    that:
+      - privx_carrier_rpm_check.results | length > 0
+      - privx_carrier_rpm_check.results[0].name == "PrivX-Carrier"
+    fail_msg: |
+      PRIVX-CARRIER RPM AVAILABILITY CHECK FAILED
+
+      PrivX-Carrier-{{ privx_target_version }} RPM is NOT available in the configured repositories.
+
+      Please ensure:
+        • PrivX-Carrier-{{ privx_target_version }} package exists in repositories
+        • Repository configuration is correct on carrier nodes
+        • Network connectivity to repositories is working
+
+      Available PrivX-Carrier versions can be checked with:
+        yum list available | grep -i privx-carrier
+
+    success_msg: "PrivX-Carrier-{{ privx_target_version }} RPM is available."
+  when: "'privxcarrier' in group_names"
+
+- name: Verify PrivX-WebProxy RPM availability
+  ansible.builtin.assert:
+    that:
+      - privx_webproxy_rpm_check.results | length > 0
+      - privx_webproxy_rpm_check.results[0].name == "PrivX-Web-Proxy"
+    fail_msg: |
+      PRIVX-WEB-PROXY RPM AVAILABILITY CHECK FAILED
+
+      PrivX-Web-Proxy-{{ privx_target_version }} RPM is NOT available in the configured repositories.
+
+      Please ensure:
+        • PrivX-Web-Proxy-{{ privx_target_version }} package exists in repositories
+        • Repository configuration is correct on web proxy nodes
+        • Network connectivity to repositories is working
+
+      Available PrivX-Web-Proxy versions can be checked with:
+        yum list available | grep -i privx-web-proxy
+
+    success_msg: "PrivX-Web-Proxy-{{ privx_target_version }} RPM is available."
+  when: "'privxwebproxy' in group_names"

@@ -1,0 +1,40 @@
+# GitLeaks configuration for PrivX Ansible repository
+title = "PrivX Ansible Upgrade Security Scan"
+
+[extend]
+# Use default rules but add custom ones
+useDefault = true
+
+[[rules]]
+id = "privx-client-id"
+description = "PrivX Client ID detected"
+regex = '''auth_credentials_client_id\s*=\s*["'][0-9a-f-]{36}["']'''
+tags = ["privx", "credentials"]
+
+[[rules]]
+id = "privx-client-secret"
+description = "PrivX Client Secret detected"
+regex = '''auth_credentials_client_secret\s*=\s*["'][A-Za-z0-9+/=]{40,}["']'''
+tags = ["privx", "credentials"]
+
+[[rules]]
+id = "ssh-private-key"
+description = "SSH Private Key detected"
+regex = '''-----BEGIN (RSA |OPENSSH |DSA |EC |PGP )?PRIVATE KEY-----'''
+tags = ["ssh", "private-key"]
+
+# Allowlist for expected configuration files (reduce false positives)
+[allowlist]
+description = "Allowlist for PrivX configuration templates"
+paths = [
+    '''configuration_files/README\.md''',
+    '''\.github/workflows/.*'''
+]
+
+# Stop words to reduce false positives
+stopwords = [
+    "example",
+    "template", 
+    "placeholder",
+    "sample"
+]

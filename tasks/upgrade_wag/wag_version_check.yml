@@ -1,0 +1,52 @@
+---
+- name: Check currently installed WAG component versions
+  ansible.builtin.package_facts:
+    manager: auto
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+
+- name: Extract current PrivX-Carrier version
+  ansible.builtin.set_fact:
+    current_carrier_version: "{{ ansible_facts.packages['PrivX-Carrier'][0].version if 'PrivX-Carrier' in ansible_facts.packages else 'not_installed' }}"
+  when: "'privxcarrier' in group_names"
+
+- name: Extract current PrivX-Web-Proxy version
+  ansible.builtin.set_fact:
+    current_webproxy_version: "{{ ansible_facts.packages['PrivX-Web-Proxy'][0].version if 'PrivX-Web-Proxy' in ansible_facts.packages else 'not_installed' }}"
+  when: "'privxwebproxy' in group_names"
+
+- name: Display current and target versions (Carrier)
+  ansible.builtin.debug:
+    msg:
+      - "Current PrivX-Carrier version: {{ current_carrier_version }}"
+      - "Target PrivX version: {{ privx_target_version }}"
+  when: "'privxcarrier' in group_names"
+
+- name: Display current and target versions (WebProxy)
+  ansible.builtin.debug:
+    msg:
+      - "Current PrivX-Web-Proxy version: {{ current_webproxy_version }}"
+      - "Target PrivX version: {{ privx_target_version }}"
+  when: "'privxwebproxy' in group_names"
+
+- name: Display early exit message and fail playbook (Carrier)
+  ansible.builtin.fail:
+    msg:
+      - "✅ PrivX-Carrier-{{ privx_target_version }} is already installed on {{ inventory_hostname }}"
+      - "No upgrade needed. Target version matches current version."
+      - "Playbook execution stopped to avoid unnecessary operations."
+  when:
+    - "'privxcarrier' in group_names"
+    - current_carrier_version != 'not_installed'
+    - current_carrier_version == (privx_target_version | string)
+
+- name: Display early exit message and fail playbook (WebProxy)
+  ansible.builtin.fail:
+    msg:
+      - "✅ PrivX-Web-Proxy-{{ privx_target_version }} is already installed on {{ inventory_hostname }}"
+      - "No upgrade needed. Target version matches current version."
+      - "Playbook execution stopped to avoid unnecessary operations."
+  when:
+    - "'privxwebproxy' in group_names"
+    - current_webproxy_version != 'not_installed'
+    - current_webproxy_version == (privx_target_version | string)

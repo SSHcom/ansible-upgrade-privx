@@ -1,0 +1,47 @@
+---
+- name: Check primary validation marker
+  ansible.builtin.stat:
+    path: "{{ privx_validation_file }}"
+  delegate_to: "{{ groups['privx_primary'][0] }}"
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  run_once: true
+  register: privx_validation
+
+- name: Verify primary node validation is completed
+  ansible.builtin.assert:
+    that:
+      - privx_validation.stat.exists
+    fail_msg: |
+      PRIMARY NODE VALIDATION REQUIRED
+
+      PrivX primary node validation has NOT been completed
+      for target version: {{ privx_target_version }}
+
+      To proceed with upgrading secondary nodes, complete
+      manual validation on the primary node and then create
+      the following file on the PRIMARY node:
+
+        {{ privx_validation_file }}
+
+      Example command (run on primary node):
+
+        touch {{ privx_validation_file }}
+
+      After validation, re-run the playbook with:
+
+        ansible-playbook upgrade_privx.yml \
+          --tags secondary_upgrade
+
+    success_msg: |
+      Primary node validation file detected.
+      Proceeding with secondary node upgrade.
+  run_once: true
+  delegate_to: "{{ groups['privx_primary'][0] }}"
+
+- name: Upgrade PrivX on additional nodes
+  ansible.builtin.package:
+    name: "PrivX-{{ privx_target_version }}"
+    state: present
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"

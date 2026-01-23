@@ -1,0 +1,27 @@
+---
+- name: Check if target PrivX RPM is available
+  ansible.builtin.dnf:
+    list: "PrivX-{{ privx_target_version }}"
+  register: privx_rpm_check
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+
+- name: Verify PrivX RPM availability
+  ansible.builtin.assert:
+    that:
+      - privx_rpm_check.results | length > 0
+      - privx_rpm_check.results[0].name == "PrivX"
+    fail_msg: |
+      RPM AVAILABILITY CHECK FAILED
+
+      PrivX-{{ privx_target_version }} RPM is NOT available in the configured repositories.
+
+      Please ensure:
+        • The target version {{ privx_target_version }} exists
+        • Repository configuration is correct
+        • Network connectivity to repositories is working
+
+      Available PrivX versions can be checked with:
+        yum list available | grep -i privx
+
+    success_msg: "PrivX-{{ privx_target_version }} RPM is available. Proceeding with upgrade."

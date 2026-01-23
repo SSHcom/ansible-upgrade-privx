@@ -1,0 +1,131 @@
+---
+- name: Check if version-specific backup already exists
+  ansible.builtin.stat:
+    path: "/opt/privx/etc/extender-config.toml.backup-pre-upgrade-{{ privx_target_version }}"
+  register: extender_backup_exists
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+
+- name: Backup existing extender configuration file
+  ansible.builtin.copy:
+    src: /opt/privx/etc/extender-config.toml
+    dest: "/opt/privx/etc/extender-config.toml.backup-pre-upgrade-{{ privx_target_version }}"
+    remote_src: true
+    backup: false
+    mode: '0644'
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: config_backup_result
+  ignore_errors: true
+  when: not extender_backup_exists.stat.exists
+
+- name: Display configuration backup status
+  ansible.builtin.debug:
+    msg: >-
+      Configuration backup status: {{
+        'Success - New backup created' if (config_backup_result.changed | default(false))
+        else ('Skipped - Backup already exists for version ' + (privx_target_version | string)
+        if extender_backup_exists.stat.exists else 'Failed (original file may not exist)')
+      }}
+
+- name: Display backup file location
+  ansible.builtin.debug:
+    msg: "Backup location: /opt/privx/etc/extender-config.toml.backup-pre-upgrade-{{ privx_target_version }}"
+  when: config_backup_result.changed | default(false) or extender_backup_exists.stat.exists
+
+- name: Upgrade PrivX-Extender (one by one for HA)
+  ansible.builtin.package:
+    name: "PrivX-Extender-{{ privx_target_version }}"
+    state: present
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  throttle: 1
+  register: extender_upgrade_result
+
+- name: Copy new extender configuration file to server
+  ansible.builtin.copy:
+    src: "configuration_files/{{ inventory_hostname }}-extender-config.toml"
+    dest: /opt/privx/etc/extender-config.toml
+    owner: root
+    group: root
+    mode: '0644'
+    backup: false
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: config_deploy_result
+  when: extender_upgrade_result.changed
+
+- name: Run extender postinstall script
+  ansible.builtin.command:
+    cmd: /opt/privx/scripts/extender-postinstall.sh
+  timeout: 120
+  remote_user: "{{ REMOTE_USER | default('root') }}"
+  become: "{{ BECOME | default('no') }}"
+  register: postinstall_result
+  when: extender_upgrade_result.changed
+  failed_when: false
+  changed_when: postinstall_result.rc == 0
+
+- name: Handle extender postinstall timeout or failure
+  ansible.builtin.fail:
+    msg:
+      - "⚠️  EXTENDER POSTINSTALL SCRIPT FAILED OR TIMED OUT"
+      - ""
+      - "Host: {{ inventory_hostname }}"
+      - "Script: /opt/privx/scripts/extender-postinstall.sh"
+      - "Return Code: {{ postinstall_result.rc | default('N/A') }}"
+      - "Timeout: 120 seconds (2 minutes)"
+      - ""
+      - "--- SCRIPT OUTPUT ---"
+      - "{{ postinstall_result.stdout | default('No stdout output') }}"
+      - ""
+      - "--- SCRIPT ERRORS ---"
+      - "{{ postinstall_result.stderr | default('No stderr output') }}"
+      - ""
+      - "⚠️  MANUAL INTERVENTION REQUIRED"
+      - ""
+      - "Please troubleshoot the issue manually:"
+      - "  1. SSH to {{ inventory_hostname }}"
+      - "  2. Check extender logs: journalctl -u privx-extender -n 100"
+      - "  3. Verify configuration: cat /opt/privx/etc/extender-config.toml"
+      - "  4. Try running postinstall manually: /opt/privx/scripts/extender-postinstall.sh"
+      - "  5. Check system resources: df -h && free -h"
+      - ""
+      - "Playbook execution stopped. Fix the issue before continuing."
+  when:
+    - extender_upgrade_result.changed
+    - postinstall_result.rc is defined
+    - postinstall_result.rc != 0
+
+- name: Display extender upgrade and deployment results
+  ansible.builtin.debug:
+    msg:
+      - "PrivX-Extender upgrade completed on {{ inventory_hostname }}."
+      - ""
+      - "RPM Status: {{ 'Updated' if extender_upgrade_result.changed else 'Already up-to-date' }}"
+      - >-
+        Configuration Backup: {{
+          'New backup created' if (config_backup_result.changed | default(false))
+          else ('Already backed up for v' + (privx_target_version | string)
+          if extender_backup_exists.stat.exists else 'Skipped (original not found)')
+        }}
+      - >-
+        Configuration Deploy: {{
+          'Success' if (config_deploy_result.changed | default(false))
+          else ('Skipped - No upgrade performed' if not extender_upgrade_result.changed
+          else 'No changes needed')
+        }}
+      - >-
+        Postinstall Status: {{
+          'Completed successfully' if (postinstall_result.rc | default(-1)) == 0
+          else ('Skipped - No upgrade performed' if not extender_upgrade_result.changed
+          else 'Failed with return code ' + (postinstall_result.rc | default(-1) | string))
+        }}
+      - ""
+      - "Note: Extenders are upgraded one by one to maintain High Availability."
+
+- name: Wait for extender service to stabilize
+  ansible.builtin.pause:
+    seconds: "{{ extender_stabilization_wait | default(30) }}"
+    prompt: "Waiting for PrivX-Extender service to stabilize on {{ inventory_hostname }} after configuration and postinstall"
+  when: groups['privxextender'] | length > 1

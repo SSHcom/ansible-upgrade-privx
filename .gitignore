@@ -1,0 +1,32 @@
+# PrivX Component Configuration Files
+# These files contain sensitive configuration data and should not be committed
+configuration_files/*.toml
+
+# Keep the README file for documentation
+!configuration_files/README.md
+
+# Common files to ignore
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Ansible specific
+*.retry
+.ansible/
