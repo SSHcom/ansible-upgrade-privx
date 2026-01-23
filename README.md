@@ -1,7 +1,7 @@
 # PrivX Upgrade Automation – Ansible
 
-[![Ansible Tests](https://img.shields.io/github/actions/workflow/status/SSHcom/ansible-upgrade-privx-dev/ansible-tests.yml?style=for-the-badge&label=Ansible%20Tests)](https://github.com/SSHcom/ansible-upgrade-privx-dev/actions)
-[![Last Commit](https://img.shields.io/github/last-commit/SSHcom/ansible-upgrade-privx-dev.svg?style=for-the-badge)](https://github.com/SSHcom/ansible-upgrade-privx-dev/commits)
+[![Ansible Tests](https://img.shields.io/github/actions/workflow/status/SSHcom/ansible-upgrade-privx/ansible-tests.yml?style=for-the-badge&label=Ansible%20Tests)](https://github.com/SSHcom/ansible-upgrade-privx/actions)
+[![Last Commit](https://img.shields.io/github/last-commit/SSHcom/ansible-upgrade-privx.svg?style=for-the-badge)](https://github.com/SSHcom/ansible-upgrade-privx/commits)
 
 This repository contains Ansible-based upgrade processes for multi-node PrivX deployments. Two upgrade methods are available:
 
@@ -576,4 +576,4 @@ ls -la configuration_files/*-extender-config.toml
 
 ## License
 
-[![See LICENSE](https://img.shields.io/github/license/SSHcom/ansible-upgrade-privx-dev.svg?style=for-the-badge)](LICENSE)
+[![See LICENSE](https://img.shields.io/github/license/SSHcom/ansible-upgrade-privx.svg?style=for-the-badge)](LICENSE)
