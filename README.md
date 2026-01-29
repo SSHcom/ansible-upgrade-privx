@@ -148,6 +148,7 @@ ansible_ssh_extra_args='-o StrictHostKeyChecking=no'
 
 - `privx_target_version`  
   Target PrivX version to upgrade to (defined in inventory).
+  **⚠️ IMPORTANT**: Consult the "Supported upgrade paths" section in the PrivX product release notes before setting this value. Not all version upgrades are supported directly - some may require intermediate upgrades.
 
 - `privx_validation_file`  
   Path to validation marker file (defined in inventory).
